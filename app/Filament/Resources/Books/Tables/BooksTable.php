@@ -1,0 +1,71 @@
+<?php
+
+namespace App\Filament\Resources\Books\Tables;
+
+use App\Filament\Resources\Books\BookResource;
+use App\Models\Book;
+use App\Models\Loan;
+use Filament\Actions\Action;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
+use Filament\Notifications\Notification;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Table;
+use Illuminate\Validation\ValidationException;
+
+class BooksTable
+{
+    public static function configure(Table $table): Table
+    {
+        return $table
+            ->columns([
+                TextColumn::make('title')
+                    ->searchable(),
+                TextColumn::make('author')
+                    ->searchable(),
+                TextColumn::make('publisher')
+                    ->searchable(),
+                TextColumn::make('year')
+                    ->numeric()
+                    ->sortable(),
+                TextColumn::make('stock')
+                    ->numeric()
+                    ->sortable(),
+                TextColumn::make('created_at')
+                    ->dateTime()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('updated_at')
+                    ->dateTime()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+            ])
+            ->filters([
+                //
+            ])
+            ->recordActions([
+                Action::make('pinjam')
+                    ->icon('heroicon-o-book-open')
+                    ->requiresConfirmation()
+                    ->visible(fn () => ! auth()->user()->isAdmin())
+                    ->disabled(fn (Book $record) => $record->stock < 1)
+                    ->action(function (Book $record) {
+                        try {
+                            Loan::borrow(auth()->user(), $record);
+                        } catch (ValidationException $exception) {
+                            Notification::make()->title($exception->validator->errors()->first())->danger()->send();
+
+                            return;
+                        }
+                        Notification::make()->title('Buku berhasil dipinjam')->success()->send();
+                    }),
+                EditAction::make(),
+            ])
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make()->authorizeIndividualRecords(fn (Book $record) => BookResource::getAuthorizationResponse('delete', $record)),
+                ]),
+            ]);
+    }
+}
